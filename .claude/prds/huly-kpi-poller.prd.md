@@ -67,7 +67,7 @@ people. Counts should look right against a quick manual Huly glance.
 
 | # | Milestone | Outcome | Status | Plan |
 |---|---|---|---|---|
-| 1 | Telegram POC | EM receives a per-person (across projects) total/done/open summary on a schedule, replacing the manual board check | in-progress | `.claude/plans/huly-kpi-poller.plan.md` |
+| 1 | Telegram POC | EM receives a per-person (across projects) total/done/open summary on a schedule, replacing the manual board check | complete (local; CI schedule pending) | `.claude/plans/huly-kpi-poller.plan.md` |
 | 2 | Monitoring-app feed | The same summary is delivered to the EM's monitoring app via its API | pending | — |
 
 ## Open Questions
