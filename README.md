@@ -6,8 +6,11 @@ Reads card counts per person from a self-hosted [Huly](https://huly.io) instance
 and posts a compact summary to a Telegram chat. Runs once per invocation;
 scheduling is handled externally by GitHub Actions.
 
-This is the **Telegram POC** (Milestone 1). Posting to a monitoring app's API is
-a later milestone and intentionally not included here.
+Milestone 1 was the **Telegram POC** (the daily message). Milestone 2 adds a
+pull **[Summary API](#summary-api-milestone-2)**: the same run also publishes a
+JSON snapshot that a bearer-authenticated serverless endpoint serves, so other
+apps (e.g. the EM's monitoring app) can consume it. Both channels run every
+invocation.
 
 ## What it reports
 
@@ -53,6 +56,9 @@ cp .env.example .env   # then fill in real values
 | `HULY_WORKSPACE` | workspace slug from `.../workbench/<workspace>` |
 | `TELEGRAM_BOT_TOKEN` | from @BotFather |
 | `TELEGRAM_CHAT_ID` | from `https://api.telegram.org/bot<TOKEN>/getUpdates` |
+| `SNAPSHOT_STORE_URL` | Vercel KV / Upstash Redis REST base URL (cron writes, API reads) |
+| `SNAPSHOT_STORE_TOKEN` | bearer token for that store |
+| `API_TOKEN` | bearer token consumers send to the API; set on the API host, not the cron |
 
 > Using a personal Huly login means the poller acts "as you". A dedicated
 > service account is preferable if your instance supports one (open question
@@ -67,11 +73,76 @@ npm run once      # connect to Huly and send one Telegram summary (needs .env)
 ```
 
 `npm run dry` (the `--dry-run` flag) only needs the four `HULY_*` vars, not the
-Telegram ones - use it to verify the Huly side and the counts before wiring up
-the bot.
+Telegram or store ones - use it to verify the Huly side and the counts before
+wiring up the bot. It prints both the Telegram text **and** the JSON snapshot the
+Summary API would serve, so you can eyeball the per-person `email` and `projects`.
 
 Spot-check: after the first send, compare 2-3 people's counts against their
 boards in Huly to confirm the status mapping matches your workflow.
+
+## Summary API (Milestone 2)
+
+Other apps pull the summary over HTTP instead of receiving a push. Because the
+cron (GitHub Actions) and the API run in different places and can't share a file,
+the cron writes the latest summary as a JSON **snapshot** to an external KV store
+(`SNAPSHOT_STORE_*`), and a bearer-authenticated serverless function serves it.
+Consumers never wait on Huly; data is as fresh as the last cron run.
+
+### Endpoints
+
+All require `Authorization: Bearer <API_TOKEN>`.
+
+| Method | Path | Returns |
+|---|---|---|
+| `GET` | `/summary` | The full roster snapshot |
+| `GET` | `/summary/{id}` | One person by Huly person id (`404` if unknown) |
+
+Responses: `401` (missing/wrong token), `405` (non-GET), `503` (no snapshot yet,
+e.g. the cron hasn't run). Each response carries `generatedAt` and a `stale` flag
+(`true` once the snapshot is older than 90 minutes).
+
+### Response shape
+
+```json
+{
+  "generatedAt": "2026-06-30T01:00:00.000Z",
+  "source": "watchog",
+  "stale": false,
+  "people": [
+    {
+      "id": "<huly person _id>",
+      "name": "Jane Doe",
+      "email": "jane@example.com",
+      "open": 2, "done": 1, "total": 3,
+      "projects": [
+        { "id": "<space _id>", "name": "High-Code", "open": 1, "done": 1, "total": 2 }
+      ]
+    }
+  ],
+  "totals": { "people": 1, "open": 2, "done": 1, "total": 3 },
+  "unassigned": 0,
+  "cancelled": 0
+}
+```
+
+- `id` is the stable Huly person `_id` — map your dashboard's people against it.
+- `email` is `null` if Huly has no email channel for that person (it lives in a
+  Huly `Channel`, not on `Person`); `projects` is the per-project breakdown, empty
+  for cards with no project/space.
+- Unlike the Telegram message (which lists only people with open cards), the API
+  returns **all** people; consumers filter.
+
+### Deploy (Vercel)
+
+The handler lives at `api/summary.mjs` (Vercel Node function) with `vercel.json`
+routing `/summary` and `/summary/:id` to it. Set `API_TOKEN`, `SNAPSHOT_STORE_URL`,
+and `SNAPSHOT_STORE_TOKEN` in the Vercel project env. The same `SNAPSHOT_STORE_*`
+secrets go in GitHub Actions so the cron can write what the function reads.
+
+```bash
+curl -H "Authorization: Bearer $API_TOKEN" https://<deploy>/summary
+curl -H "Authorization: Bearer $API_TOKEN" https://<deploy>/summary/<personId>
+```
 
 ## Deploy (GitHub Actions)
 

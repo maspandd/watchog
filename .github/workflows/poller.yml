@@ -23,3 +23,6 @@ jobs:
           HULY_WORKSPACE: ${{ secrets.HULY_WORKSPACE }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Snapshot store the cron writes for the Summary API to serve (M2).
+          SNAPSHOT_STORE_URL: ${{ secrets.SNAPSHOT_STORE_URL }}
+          SNAPSHOT_STORE_TOKEN: ${{ secrets.SNAPSHOT_STORE_TOKEN }}
