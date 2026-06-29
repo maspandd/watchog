@@ -36,7 +36,7 @@ exclusion branch in `lib/aggregate.mjs`.
 
 ## Setup
 
-Requires Node.js >= 20.
+Requires Node.js >= 24.
 
 ```bash
 npm install

@@ -11,7 +11,7 @@
     "dry": "node poller.mjs --dry-run"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "dependencies": {
     "@hcengineering/api-client": "^0.7.423",
