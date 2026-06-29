@@ -1,0 +1,25 @@
+name: Huly Poller
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # 01:00 UTC = 08:00 GMT+7. GitHub cron is UTC and may run a few minutes late.
+    - cron: '0 1 * * *'
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: node poller.mjs --once
+        env:
+          HULY_URL: ${{ secrets.HULY_URL }}
+          HULY_EMAIL: ${{ secrets.HULY_EMAIL }}
+          HULY_PASSWORD: ${{ secrets.HULY_PASSWORD }}
+          HULY_WORKSPACE: ${{ secrets.HULY_WORKSPACE }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

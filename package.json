@@ -1,0 +1,20 @@
+{
+  "name": "watchog",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Polls Huly for per-person card counts and posts a summary to Telegram.",
+  "scripts": {
+    "once": "node poller.mjs --once",
+    "start": "node poller.mjs",
+    "test": "node --test",
+    "dry": "node poller.mjs --dry-run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@hcengineering/api-client": "^0.7.423",
+    "dotenv": "^16.4.5"
+  }
+}
