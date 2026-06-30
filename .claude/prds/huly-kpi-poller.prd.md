@@ -68,7 +68,7 @@ people. Counts should look right against a quick manual Huly glance.
 | # | Milestone | Outcome | Status | Plan |
 |---|---|---|---|---|
 | 1 | Telegram POC | EM receives a per-person (across projects) total/done/open summary on a schedule, replacing the manual board check | complete (local; CI schedule pending) | `.claude/plans/huly-kpi-poller.plan.md` |
-| 2 | Summary API | watchog exposes the per-person summary as an authenticated HTTP API that other apps (e.g. the EM's monitoring app) pull and consume: a full-roster `/summary` plus a per-person `/summary/{id}`. Each person row carries the Huly person id and email for consumer-side mapping, plus the projects on the workspace they hold cards in (where Huly exposes it) | complete (local + Upstash store verified; Vercel deploy pending) | `.claude/plans/huly-kpi-poller-m2.plan.md` |
+| 2 | Summary API | watchog exposes the per-person summary as an authenticated HTTP API that other apps (e.g. the EM's monitoring app) pull and consume: a full-roster `/summary` plus a per-person `/summary/{id}`. Each person row carries the Huly person id and email for consumer-side mapping, plus the projects on the workspace they hold cards in (where Huly exposes it) | complete (deployed to Vercel; Upstash store verified) | `.claude/plans/huly-kpi-poller-m2.plan.md` |
 
 ## Open Questions
 - [ ] **Service account vs. personal login** — should the poller authenticate as
