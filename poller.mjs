@@ -11,11 +11,12 @@
 //   --dry-run   print the summary and the JSON snapshot to the console instead
 //               of sending (and skip the Telegram + store env requirement).
 import 'dotenv/config'
-import { connectHuly, fetchData } from './lib/huly.mjs'
+import { connectHuly, fetchData, fetchProjects } from './lib/huly.mjs'
 import { aggregate } from './lib/aggregate.mjs'
 import { formatSummary, sendTelegram } from './lib/telegram.mjs'
 import { buildSnapshot } from './lib/snapshot.mjs'
-import { putSnapshot } from './lib/store.mjs'
+import { buildProjects } from './lib/projects.mjs'
+import { putSnapshot, putResource, PROJECTS_KEY } from './lib/store.mjs'
 
 const dryRun = process.argv.includes('--dry-run')
 
@@ -62,21 +63,39 @@ async function main() {
     const text = formatSummary(result, { generatedAt })
     const snapshot = buildSnapshot(result, { generatedAt })
 
+    // Project catalog (Milestone 3). Best effort + pure builder; resolves
+    // members/owners (account UUIDs) to the same people the summary uses.
+    const rawProjects = await fetchProjects(client)
+    const projects = buildProjects(
+      rawProjects,
+      {
+        personByUuid: data.personByUuid,
+        personNameById: data.personNameById,
+        loginEmailById: data.loginEmailById,
+        contactEmailById: data.contactEmailById,
+      },
+      { generatedAt },
+    )
+    console.log(`Built project catalog: ${projects.projects.length} project(s).`)
+
     if (dryRun) {
       console.log('\n--- dry run: nothing sent ---\n')
       console.log(text)
       console.log('\n--- snapshot payload (served by the Summary API) ---\n')
       console.log(JSON.stringify(snapshot, null, 2))
+      console.log('\n--- projects payload (served by the Projects API) ---\n')
+      console.log(JSON.stringify(projects, null, 2))
       return
     }
 
-    // Attempt both channels even if one fails, then fail the run if either did,
-    // so a store outage never silently suppresses Telegram (and vice versa).
+    // Attempt all channels even if one fails, then fail the run if any did, so
+    // one outage never silently suppresses the others.
     const outcomes = await Promise.allSettled([
       sendTelegram(process.env.TELEGRAM_BOT_TOKEN, process.env.TELEGRAM_CHAT_ID, text),
       putSnapshot(snapshot),
+      putResource(PROJECTS_KEY, projects),
     ])
-    const labels = ['Telegram', 'Snapshot store']
+    const labels = ['Telegram', 'Snapshot store', 'Projects store']
     const failures = outcomes
       .map((o, i) => ({ o, label: labels[i] }))
       .filter(({ o }) => o.status === 'rejected')
@@ -85,7 +104,7 @@ async function main() {
       throw new Error(`${failures.length} of ${outcomes.length} delivery channel(s) failed`)
     }
 
-    console.log('Telegram summary sent; snapshot published for the Summary API.')
+    console.log('Telegram summary sent; snapshot and projects published for the pull APIs.')
   } finally {
     if (typeof client.close === 'function') await client.close()
   }

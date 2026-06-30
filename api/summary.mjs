@@ -8,21 +8,10 @@
 //   /summary/{id}   -> one person by Huly person id (404 if absent)
 
 import { getSnapshot } from '../lib/store.mjs'
-
-const STALE_MS = 90 * 60 * 1000 // 90 min; older snapshot is flagged stale
-
-// Constant-time string compare so token checks don't leak via timing.
-function safeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return diff === 0
-}
+import { authorize, json, isStale } from '../lib/apiauth.mjs'
 
 export function handleSummary({ method = 'GET', path = '/', authHeader = '' }, { snapshot, token, now }) {
-  const json = (status, body) => ({ status, headers: { 'content-type': 'application/json' }, body })
-
-  if (!token || !safeEqual(authHeader, `Bearer ${token}`)) return json(401, { error: 'Unauthorized' })
+  if (!authorize(authHeader, token)) return json(401, { error: 'Unauthorized' })
   if (method !== 'GET') return json(405, { error: 'Method Not Allowed' })
 
   // Match /summary or /summary/{id}, tolerant of an /api prefix and querystring.
@@ -30,8 +19,7 @@ export function handleSummary({ method = 'GET', path = '/', authHeader = '' }, {
   if (!m) return json(404, { error: 'Not Found' })
   if (!snapshot) return json(503, { error: 'No summary available yet' })
 
-  const generatedMs = snapshot.generatedAt ? Date.parse(snapshot.generatedAt) : NaN
-  const stale = Number.isFinite(generatedMs) ? now - generatedMs > STALE_MS : true
+  const stale = isStale(snapshot.generatedAt, now)
 
   if (m[1]) {
     const id = decodeURIComponent(m[1])

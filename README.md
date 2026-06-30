@@ -9,8 +9,12 @@ scheduling is handled externally by GitHub Actions.
 Milestone 1 was the **Telegram POC** (the daily message). Milestone 2 adds a
 pull **[Summary API](#summary-api-milestone-2)**: the same run also publishes a
 JSON snapshot that a bearer-authenticated serverless endpoint serves, so other
-apps (e.g. the EM's monitoring app) can consume it. Both channels run every
-invocation.
+apps (e.g. the EM's monitoring app) can consume it. Milestone 3 adds the
+**[Projects API](#projects-api-milestone-3)** (project catalog, detail, team).
+All channels run every invocation.
+
+> **Full HTTP API reference:** [`docs/API.md`](docs/API.md) — every endpoint,
+> field, and error with real (redacted) example payloads.
 
 ## What it reports
 
@@ -146,6 +150,73 @@ secrets go in GitHub Actions so the cron can write what the function reads.
 ```bash
 curl -H "Authorization: Bearer $API_TOKEN" https://<deploy>/summary
 curl -H "Authorization: Bearer $API_TOKEN" https://<deploy>/summary/<personId>
+```
+
+## Projects API (Milestone 3)
+
+Same cached-snapshot model as the Summary API: the cron also fetches the Huly
+project catalog, resolves each project's members and owners to people, and writes
+it to the store under `watchog:projects`. A bearer-authenticated serverless
+function (`api/projects.mjs`) serves slices of it — the function stays Huly-free.
+
+### Endpoints
+
+All require `Authorization: Bearer <API_TOKEN>`.
+
+| Method | Path | Returns |
+|---|---|---|
+| `GET` | `/projects` | The project catalog (light: no members embedded) |
+| `GET` | `/projects/{id}` | One project with full `description` + embedded `members[]` (`404` if unknown) |
+| `GET` | `/projects/{id}/team` | That project's members, resolved to people (`404` if unknown) |
+
+Responses: `401` (missing/wrong token), `405` (non-GET), `503` (no projects
+document yet). Each carries `generatedAt` and a `stale` flag (`true` once older
+than 90 minutes), exactly like `/summary`.
+
+### Response shapes
+
+`GET /projects`:
+
+```json
+{
+  "generatedAt": "2026-06-30T01:00:00.000Z",
+  "source": "watchog",
+  "stale": false,
+  "projects": [
+    {
+      "id": "<space _id>", "name": "High-Code", "identifier": "HC",
+      "archived": false, "private": false, "memberCount": 7,
+      "owners": [{ "id": "<person _id>", "name": "Jane Doe" }]
+    }
+  ]
+}
+```
+
+`GET /projects/{id}/team`:
+
+```json
+{
+  "projectId": "<space _id>", "name": "High-Code",
+  "stale": false, "generatedAt": "2026-06-30T01:00:00.000Z",
+  "members": [
+    { "id": "<person _id>", "name": "Jane Doe",
+      "email": "jane@example.com", "loginEmail": "jane@example.com", "contactEmail": null }
+  ]
+}
+```
+
+- Huly has **no `lead` field** — `owners[]` is the lead.
+- Project `members[]`/`owners[]` are account UUIDs (`Person.personUuid`); they
+  resolve to the same person `id` (`Person._id`) and `name`/email fields the
+  Summary API uses, so consumers map people on one id across both APIs.
+- **Private projects** are only visible to the poller's own login. Many projects
+  are private, so coverage depends on the poller account's membership; a dedicated
+  service account would widen it (open question in the PRD).
+
+```bash
+curl -H "Authorization: Bearer $API_TOKEN" https://<deploy>/projects
+curl -H "Authorization: Bearer $API_TOKEN" https://<deploy>/projects/<id>
+curl -H "Authorization: Bearer $API_TOKEN" https://<deploy>/projects/<id>/team
 ```
 
 ## Deploy (GitHub Actions)
