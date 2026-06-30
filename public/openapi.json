@@ -6,7 +6,7 @@
     "description": "Read-only HTTP API over a self-hosted Huly workspace. A cron writes JSON snapshots to a KV store; these endpoints serve slices of them (the endpoints never call Huly). All routes are GET-only and require a bearer token. Every success response carries `generatedAt` and a `stale` flag (true once older than 90 minutes). Example values are redacted from a live workspace."
   },
   "servers": [
-    { "url": "https://your-deploy.vercel.app", "description": "Production (replace with your deploy URL)" },
+    { "url": "https://watchog-kappa.vercel.app", "description": "Production" },
     { "url": "http://localhost:3000", "description": "Local dev server (node local-server.mjs)" }
   ],
   "security": [{ "bearerAuth": [] }],
