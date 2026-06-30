@@ -5,14 +5,16 @@
 // response. Mirrors api/summary.mjs.
 //
 // Routes (GET only, bearer-authenticated):
-//   /projects             -> the project catalog (light: no members embedded)
-//   /projects/{id}        -> one project with full description + members[]
-//   /projects/{id}/team   -> that project's members, resolved to people
+//   /projects               -> the project catalog (light: no members embedded)
+//   /projects/{id}          -> one project with full description + members[]
+//   /projects/{id}/team     -> that project's members, resolved to people
+//   /projects/{id}/summary  -> per-project card counts, derived from the roster
 //
 // 404 on an unknown id; 503 until the cron has written the document.
 
-import { getResource, PROJECTS_KEY } from '../lib/store.mjs'
+import { getResource, PROJECTS_KEY, SUMMARY_KEY } from '../lib/store.mjs'
 import { authorize, json, isStale } from '../lib/apiauth.mjs'
+import { projectSummary } from '../lib/views.mjs'
 
 // List items are intentionally light: drop members[]/description, and reduce
 // owners to id+name so the catalog stays small and PII-free.
@@ -28,14 +30,24 @@ function toListItem(p) {
   }
 }
 
-export function handleProjects({ method = 'GET', path = '/', authHeader = '' }, { doc, token, now }) {
+export function handleProjects({ method = 'GET', path = '/', authHeader = '' }, { doc, summary, token, now }) {
   if (!authorize(authHeader, token)) return json(401, { error: 'Unauthorized' })
   if (method !== 'GET') return json(405, { error: 'Method Not Allowed' })
 
-  // Match /projects, /projects/{id}, or /projects/{id}/team — tolerant of an
-  // /api prefix and a querystring. Group 1 = id, group 2 = 'team'.
-  const m = path.match(/\/projects(?:\/([^/?]+)(?:\/(team))?)?\/?(?:\?|$)/)
+  // Match /projects, /projects/{id}, or /projects/{id}/{team|summary} — tolerant
+  // of an /api prefix and a querystring. Group 1 = id, group 2 = sub-resource.
+  const m = path.match(/\/projects(?:\/([^/?]+)(?:\/(team|summary))?)?\/?(?:\?|$)/)
   if (!m) return json(404, { error: 'Not Found' })
+
+  // /projects/{id}/summary derives from the roster snapshot, not the catalog,
+  // so it is handled before the catalog 503/404 checks.
+  if (m[1] && m[2] === 'summary') {
+    if (!summary) return json(503, { error: 'No summary available yet' })
+    const ps = projectSummary(summary, doc || {}, decodeURIComponent(m[1]))
+    if (!ps) return json(404, { error: 'Project not found' })
+    return json(200, { ...ps, generatedAt: summary.generatedAt ?? null, stale: isStale(summary.generatedAt, now) })
+  }
+
   if (!doc) return json(503, { error: 'No projects available yet' })
 
   const stale = isStale(doc.generatedAt, now)
@@ -72,13 +84,17 @@ export function handleProjects({ method = 'GET', path = '/', authHeader = '' }, 
 
 // Vercel Node serverless adapter.
 export default async function handler(req, res) {
-  let doc = null
-  try {
-    doc = await getResource(PROJECTS_KEY)
-  } catch (err) {
-    console.error('getResource(projects) failed:', err)
-    // leave doc null -> handler returns 503
-  }
+  // The catalog backs most routes; the roster snapshot backs /{id}/summary.
+  const [doc, summary] = await Promise.all([
+    getResource(PROJECTS_KEY).catch((err) => {
+      console.error('getResource(projects) failed:', err)
+      return null
+    }),
+    getResource(SUMMARY_KEY).catch((err) => {
+      console.error('getResource(summary) failed:', err)
+      return null
+    }),
+  ])
 
   const result = handleProjects(
     {
@@ -86,7 +102,7 @@ export default async function handler(req, res) {
       path: req.url || '/projects',
       authHeader: req.headers?.authorization || '',
     },
-    { doc, token: process.env.API_TOKEN, now: Date.now() },
+    { doc, summary, token: process.env.API_TOKEN, now: Date.now() },
   )
 
   res.statusCode = result.status

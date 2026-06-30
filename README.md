@@ -11,10 +11,14 @@ pull **[Summary API](#summary-api-milestone-2)**: the same run also publishes a
 JSON snapshot that a bearer-authenticated serverless endpoint serves, so other
 apps (e.g. the EM's monitoring app) can consume it. Milestone 3 adds the
 **[Projects API](#projects-api-milestone-3)** (project catalog, detail, team).
-All channels run every invocation.
+Milestone 4 adds orthogonal **view** routes derived from the same snapshots —
+`/persons`, `/persons/{id}/summary`, `/overview`, and `/projects/{id}/summary`
+(see [`docs/API.md`](docs/API.md)). All channels run every invocation.
 
 > **Full HTTP API reference:** [`docs/API.md`](docs/API.md) — every endpoint,
-> field, and error with real (redacted) example payloads.
+> field, and error with real (redacted) example payloads. Interactive **Swagger
+> UI** is served at `/docs` on the deploy, backed by the OpenAPI spec at
+> [`public/openapi.json`](public/openapi.json) (`/openapi.json`).
 
 ## What it reports
 

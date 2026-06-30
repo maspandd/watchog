@@ -6,15 +6,26 @@ workspace and serves them over a small bearer-authenticated HTTP API. A cron
 serverless endpoints read those documents — so the API is **always cheap and
 fast, and as fresh as the last cron run**. The endpoints never call Huly.
 
-Two resource families are exposed:
+The data is exposed as several orthogonal views, all derived from the same
+snapshots so they reconcile with each other:
 
-- **[Summary API](#summary-api)** — per-person card counts (`/summary`).
-- **[Projects API](#projects-api)** — the project catalog and membership
-  (`/projects`).
+- **[Summary API](#summary-api)** — per-person card counts (`/summary`) and the
+  overall totals (`/overview`).
+- **[Persons API](#persons-api)** — the person directory and per-person summary
+  (`/persons`).
+- **[Projects API](#projects-api)** — the project catalog, membership, and
+  per-project summary (`/projects`).
 
 All example payloads below are captured from a live workspace; personal names
 and emails have been replaced with fictional values, but the structure, field
 names, and counts are real.
+
+> **Interactive docs (Swagger UI):** an OpenAPI 3.0 spec lives at
+> [`public/openapi.json`](../public/openapi.json) and renders as Swagger UI at
+> **`/docs`** on the deploy (locally: `http://localhost:3000/docs` after
+> `node local-server.mjs`). Use the **Authorize** button to paste your bearer
+> token and try requests in the browser. This Markdown page is the prose
+> companion to that spec.
 
 ---
 
@@ -189,6 +200,87 @@ One person by their Huly person id. Returns the same person object as a row in
 { "error": "Person not found" }
 ```
 
+### `GET /overview`
+
+The overall totals only — a lean view for a header/badge that doesn't need the
+full roster. Derived from the same snapshot as `/summary`.
+
+**Response `200`**
+
+```json
+{
+  "generatedAt": "2026-06-30T03:58:39.753Z",
+  "source": "watchog",
+  "stale": false,
+  "totals": { "people": 44, "total": 4146, "done": 3185, "open": 961 },
+  "unassigned": 623,
+  "cancelled": 76
+}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `totals` | object | `{ people, total, done, open }` across the roster |
+| `unassigned` | number | Cards with no assignee |
+| `cancelled` | number | Cancelled cards (excluded from totals) |
+
+---
+
+## Persons API
+
+Person identity and per-person card summary, derived from the `/summary`
+snapshot. The directory contains **people who have cards** (assignees) — the same
+people that appear in `/summary`.
+
+### `GET /persons`
+
+The person directory: identity only (no card counts), sorted by name.
+
+**Response `200`**
+
+```json
+{
+  "generatedAt": "2026-06-30T03:58:39.753Z",
+  "source": "watchog",
+  "stale": false,
+  "persons": [
+    {
+      "id": "69968d22a4fa712519af41e3",
+      "name": "Jane Doe",
+      "email": "jane.doe@example.com",
+      "loginEmail": "jane.doe@example.com",
+      "contactEmail": "jane.doe@example.com"
+    }
+  ]
+}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `persons` | array | Each entry: `{ id, name, email, loginEmail, contactEmail }` — no card counts |
+
+### `GET /persons/{id}`
+
+One person's identity (no counts). `404` if the id is unknown.
+
+```json
+{
+  "id": "69968d22a4fa712519af41e3",
+  "name": "Jane Doe",
+  "email": "jane.doe@example.com",
+  "loginEmail": "jane.doe@example.com",
+  "contactEmail": "jane.doe@example.com",
+  "generatedAt": "2026-06-30T03:58:39.753Z",
+  "stale": false
+}
+```
+
+### `GET /persons/{id}/summary`
+
+That person's card summary — `open/done/total` plus the per-project breakdown.
+This returns the **same object as [`GET /summary/{id}`](#get-summaryid)** (it is an
+alias under the persons resource); `404` if the id is unknown.
+
 ---
 
 ## Projects API
@@ -355,6 +447,46 @@ this project".
 { "error": "Project not found" }
 ```
 
+### `GET /projects/{id}/summary`
+
+Per-project card counts: the project's totals plus a per-person breakdown,
+derived from the `/summary` roster (so the numbers reconcile with `/summary`).
+
+**Response `200`**
+
+```json
+{
+  "projectId": "69967ace2a6825a419f8fcd3",
+  "name": "PPU Internships",
+  "identifier": "PPU",
+  "stale": false,
+  "generatedAt": "2026-06-30T03:58:39.753Z",
+  "totals": { "people": 7, "total": 402, "done": 106, "open": 296 },
+  "people": [
+    { "id": "69968d22a4fa712519af41e3", "name": "Jane Doe", "open": 296, "done": 106, "total": 402 }
+  ]
+}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `projectId` | string | Huly project `_id` |
+| `name` / `identifier` | string \| null | Project name and short key |
+| `totals` | object | `{ people, total, done, open }` across assignees on this project |
+| `people` | array | Per-person counts on this project: `{ id, name, open, done, total }`, sorted by open desc |
+
+> **Derived from the roster.** These counts sum each person's per-project
+> breakdown, so they **exclude unassigned cards** and cards with no project. A
+> project that exists in the catalog but has no assigned cards returns `200` with
+> zeroed totals (not `404`). `404` is returned only when the id is in neither the
+> catalog nor any person's breakdown.
+
+**Response `404`** — unknown id:
+
+```json
+{ "error": "Project not found" }
+```
+
 ---
 
 ## Endpoint summary
@@ -362,10 +494,15 @@ this project".
 | Method | Path | Returns | Errors |
 |---|---|---|---|
 | `GET` | `/summary` | Full per-person roster | 401, 405, 503 |
-| `GET` | `/summary/{id}` | One person | 401, 404, 405, 503 |
+| `GET` | `/summary/{id}` | One person (counts + projects) | 401, 404, 405, 503 |
+| `GET` | `/overview` | Overall totals only | 401, 405, 503 |
+| `GET` | `/persons` | Person directory (identity only) | 401, 405, 503 |
+| `GET` | `/persons/{id}` | One person's identity | 401, 404, 405, 503 |
+| `GET` | `/persons/{id}/summary` | One person (alias of `/summary/{id}`) | 401, 404, 405, 503 |
 | `GET` | `/projects` | Light project catalog | 401, 405, 503 |
 | `GET` | `/projects/{id}` | One project, full detail | 401, 404, 405, 503 |
 | `GET` | `/projects/{id}/team` | One project's members | 401, 404, 405, 503 |
+| `GET` | `/projects/{id}/summary` | Per-project card counts | 401, 404, 405, 503 |
 
 ## Testing locally
 
@@ -373,9 +510,10 @@ this project".
 node local-server.mjs    # serves all routes on http://localhost:3000
 
 curl -H "Authorization: Bearer $API_TOKEN" http://localhost:3000/summary
-curl -H "Authorization: Bearer $API_TOKEN" http://localhost:3000/projects
-curl -H "Authorization: Bearer $API_TOKEN" http://localhost:3000/projects/<id>
-curl -H "Authorization: Bearer $API_TOKEN" http://localhost:3000/projects/<id>/team
+curl -H "Authorization: Bearer $API_TOKEN" http://localhost:3000/overview
+curl -H "Authorization: Bearer $API_TOKEN" http://localhost:3000/persons
+curl -H "Authorization: Bearer $API_TOKEN" http://localhost:3000/persons/<id>/summary
+curl -H "Authorization: Bearer $API_TOKEN" http://localhost:3000/projects/<id>/summary
 ```
 
 The local server reads the same KV store the deployed API does, so it returns

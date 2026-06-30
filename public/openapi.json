@@ -1,0 +1,414 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "watchog API",
+    "version": "1.0.0",
+    "description": "Read-only HTTP API over a self-hosted Huly workspace. A cron writes JSON snapshots to a KV store; these endpoints serve slices of them (the endpoints never call Huly). All routes are GET-only and require a bearer token. Every success response carries `generatedAt` and a `stale` flag (true once older than 90 minutes). Example values are redacted from a live workspace."
+  },
+  "servers": [
+    { "url": "https://your-deploy.vercel.app", "description": "Production (replace with your deploy URL)" },
+    { "url": "http://localhost:3000", "description": "Local dev server (node local-server.mjs)" }
+  ],
+  "security": [{ "bearerAuth": [] }],
+  "tags": [
+    { "name": "Summary", "description": "Per-person card counts and overall totals" },
+    { "name": "Persons", "description": "Person directory and per-person summary" },
+    { "name": "Projects", "description": "Project catalog, membership, and per-project summary" }
+  ],
+  "paths": {
+    "/summary": {
+      "get": {
+        "tags": ["Summary"],
+        "summary": "Full per-person roster",
+        "operationId": "getSummary",
+        "responses": {
+          "200": {
+            "description": "The full roster snapshot",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SummarySnapshot" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "405": { "$ref": "#/components/responses/MethodNotAllowed" },
+          "503": { "$ref": "#/components/responses/NoData" }
+        }
+      }
+    },
+    "/summary/{id}": {
+      "get": {
+        "tags": ["Summary"],
+        "summary": "One person (counts + projects)",
+        "operationId": "getSummaryById",
+        "parameters": [{ "$ref": "#/components/parameters/PersonId" }],
+        "responses": {
+          "200": {
+            "description": "One person's card summary",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PersonSummary" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "405": { "$ref": "#/components/responses/MethodNotAllowed" },
+          "503": { "$ref": "#/components/responses/NoData" }
+        }
+      }
+    },
+    "/overview": {
+      "get": {
+        "tags": ["Summary"],
+        "summary": "Overall totals only",
+        "operationId": "getOverview",
+        "responses": {
+          "200": {
+            "description": "Overall totals (lean)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Overview" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "405": { "$ref": "#/components/responses/MethodNotAllowed" },
+          "503": { "$ref": "#/components/responses/NoData" }
+        }
+      }
+    },
+    "/persons": {
+      "get": {
+        "tags": ["Persons"],
+        "summary": "Person directory (identity only)",
+        "operationId": "getPersons",
+        "responses": {
+          "200": {
+            "description": "Directory of assignees, sorted by name",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PersonsDirectory" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "405": { "$ref": "#/components/responses/MethodNotAllowed" },
+          "503": { "$ref": "#/components/responses/NoData" }
+        }
+      }
+    },
+    "/persons/{id}": {
+      "get": {
+        "tags": ["Persons"],
+        "summary": "One person's identity",
+        "operationId": "getPersonById",
+        "parameters": [{ "$ref": "#/components/parameters/PersonId" }],
+        "responses": {
+          "200": {
+            "description": "One person's identity (no card counts)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PersonIdentityResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "405": { "$ref": "#/components/responses/MethodNotAllowed" },
+          "503": { "$ref": "#/components/responses/NoData" }
+        }
+      }
+    },
+    "/persons/{id}/summary": {
+      "get": {
+        "tags": ["Persons"],
+        "summary": "One person's card summary (alias of /summary/{id})",
+        "operationId": "getPersonSummary",
+        "parameters": [{ "$ref": "#/components/parameters/PersonId" }],
+        "responses": {
+          "200": {
+            "description": "Same object as GET /summary/{id}",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PersonSummary" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "405": { "$ref": "#/components/responses/MethodNotAllowed" },
+          "503": { "$ref": "#/components/responses/NoData" }
+        }
+      }
+    },
+    "/projects": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "Light project catalog",
+        "operationId": "getProjects",
+        "responses": {
+          "200": {
+            "description": "Project catalog (no members embedded)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProjectCatalog" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "405": { "$ref": "#/components/responses/MethodNotAllowed" },
+          "503": { "$ref": "#/components/responses/NoData" }
+        }
+      }
+    },
+    "/projects/{id}": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "One project, full detail",
+        "operationId": "getProjectById",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "responses": {
+          "200": {
+            "description": "Full project with description + resolved members/owners",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProjectDetail" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "405": { "$ref": "#/components/responses/MethodNotAllowed" },
+          "503": { "$ref": "#/components/responses/NoData" }
+        }
+      }
+    },
+    "/projects/{id}/team": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "One project's members",
+        "operationId": "getProjectTeam",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "responses": {
+          "200": {
+            "description": "The project's members, resolved to people",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProjectTeam" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "405": { "$ref": "#/components/responses/MethodNotAllowed" },
+          "503": { "$ref": "#/components/responses/NoData" }
+        }
+      }
+    },
+    "/projects/{id}/summary": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "Per-project card counts",
+        "description": "Totals plus a per-person breakdown, derived from the /summary roster. Excludes unassigned cards and cards with no project. A catalog project with no assigned cards returns 200 with zeroed totals; 404 only when the id is in neither the catalog nor any person's breakdown.",
+        "operationId": "getProjectSummary",
+        "parameters": [{ "$ref": "#/components/parameters/ProjectId" }],
+        "responses": {
+          "200": {
+            "description": "Per-project totals + per-person rows",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProjectSummary" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "405": { "$ref": "#/components/responses/MethodNotAllowed" },
+          "503": { "$ref": "#/components/responses/NoData" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "description": "The API_TOKEN configured on the API host." }
+    },
+    "parameters": {
+      "PersonId": {
+        "name": "id", "in": "path", "required": true,
+        "description": "Huly person `_id`.",
+        "schema": { "type": "string" }, "example": "69968d22a4fa712519af41e3"
+      },
+      "ProjectId": {
+        "name": "id", "in": "path", "required": true,
+        "description": "Huly project (space) `_id`.",
+        "schema": { "type": "string" }, "example": "6912bbb19a6df5a9db9ff353"
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or invalid bearer token",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" }, "example": { "error": "Unauthorized" } } }
+      },
+      "NotFound": {
+        "description": "Unknown id",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" }, "example": { "error": "Project not found" } } }
+      },
+      "MethodNotAllowed": {
+        "description": "Method other than GET",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" }, "example": { "error": "Method Not Allowed" } } }
+      },
+      "NoData": {
+        "description": "The cron has not written this document yet",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" }, "example": { "error": "No summary available yet" } } }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": { "error": { "type": "string" } },
+        "required": ["error"]
+      },
+      "Totals": {
+        "type": "object",
+        "properties": {
+          "people": { "type": "integer", "example": 44 },
+          "total": { "type": "integer", "example": 4146 },
+          "done": { "type": "integer", "example": 3185 },
+          "open": { "type": "integer", "example": 961 }
+        }
+      },
+      "ProjectBreakdown": {
+        "type": "object",
+        "description": "A person's card counts on one project.",
+        "properties": {
+          "id": { "type": "string", "example": "69967ace2a6825a419f8fcd3" },
+          "name": { "type": "string", "example": "PPU Internships" },
+          "total": { "type": "integer", "example": 402 },
+          "done": { "type": "integer", "example": 106 },
+          "open": { "type": "integer", "example": 296 }
+        }
+      },
+      "PersonIdentity": {
+        "type": "object",
+        "description": "A person resolved to id, name, and the three email sources.",
+        "properties": {
+          "id": { "type": "string", "example": "69968d22a4fa712519af41e3" },
+          "name": { "type": "string", "example": "Jane Doe" },
+          "email": { "type": "string", "nullable": true, "description": "Convenience: loginEmail ?? contactEmail", "example": "jane.doe@example.com" },
+          "loginEmail": { "type": "string", "nullable": true, "description": "contact:class:SocialIdentity", "example": "jane.doe@example.com" },
+          "contactEmail": { "type": "string", "nullable": true, "description": "contact:class:Channel", "example": "jane.doe@example.com" }
+        }
+      },
+      "Person": {
+        "type": "object",
+        "description": "A person row with card counts and per-project breakdown.",
+        "properties": {
+          "id": { "type": "string", "example": "69968d22a4fa712519af41e3" },
+          "name": { "type": "string", "example": "Jane Doe" },
+          "email": { "type": "string", "nullable": true, "example": "jane.doe@example.com" },
+          "loginEmail": { "type": "string", "nullable": true, "example": "jane.doe@example.com" },
+          "contactEmail": { "type": "string", "nullable": true, "example": "jane.doe@example.com" },
+          "open": { "type": "integer", "example": 309 },
+          "done": { "type": "integer", "example": 130 },
+          "total": { "type": "integer", "example": 439 },
+          "projects": { "type": "array", "items": { "$ref": "#/components/schemas/ProjectBreakdown" } }
+        }
+      },
+      "OwnerRef": {
+        "type": "object",
+        "description": "Lightweight owner reference used in the catalog list.",
+        "properties": {
+          "id": { "type": "string", "example": "689d8510a4fa712519af406e" },
+          "name": { "type": "string", "example": "Sam Lee" }
+        }
+      },
+      "SummarySnapshot": {
+        "type": "object",
+        "properties": {
+          "generatedAt": { "type": "string", "format": "date-time", "nullable": true, "example": "2026-06-30T03:58:39.753Z" },
+          "source": { "type": "string", "example": "watchog" },
+          "stale": { "type": "boolean", "example": false },
+          "people": { "type": "array", "items": { "$ref": "#/components/schemas/Person" } },
+          "totals": { "$ref": "#/components/schemas/Totals" },
+          "unassigned": { "type": "integer", "example": 623 },
+          "cancelled": { "type": "integer", "example": 76 }
+        }
+      },
+      "PersonSummary": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Person" },
+          {
+            "type": "object",
+            "properties": {
+              "generatedAt": { "type": "string", "format": "date-time", "nullable": true, "example": "2026-06-30T03:58:39.753Z" },
+              "stale": { "type": "boolean", "example": false }
+            }
+          }
+        ]
+      },
+      "Overview": {
+        "type": "object",
+        "properties": {
+          "generatedAt": { "type": "string", "format": "date-time", "nullable": true, "example": "2026-06-30T03:58:39.753Z" },
+          "source": { "type": "string", "example": "watchog" },
+          "stale": { "type": "boolean", "example": false },
+          "totals": { "$ref": "#/components/schemas/Totals" },
+          "unassigned": { "type": "integer", "example": 623 },
+          "cancelled": { "type": "integer", "example": 76 }
+        }
+      },
+      "PersonsDirectory": {
+        "type": "object",
+        "properties": {
+          "generatedAt": { "type": "string", "format": "date-time", "nullable": true, "example": "2026-06-30T03:58:39.753Z" },
+          "source": { "type": "string", "example": "watchog" },
+          "stale": { "type": "boolean", "example": false },
+          "persons": { "type": "array", "items": { "$ref": "#/components/schemas/PersonIdentity" } }
+        }
+      },
+      "PersonIdentityResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/PersonIdentity" },
+          {
+            "type": "object",
+            "properties": {
+              "generatedAt": { "type": "string", "format": "date-time", "nullable": true, "example": "2026-06-30T03:58:39.753Z" },
+              "stale": { "type": "boolean", "example": false }
+            }
+          }
+        ]
+      },
+      "ProjectListItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "6912bbb19a6df5a9db9ff353" },
+          "name": { "type": "string", "example": "[Tech Academy] Learning Management System" },
+          "identifier": { "type": "string", "nullable": true, "example": "TECH" },
+          "archived": { "type": "boolean", "example": false },
+          "private": { "type": "boolean", "example": false },
+          "memberCount": { "type": "integer", "example": 12 },
+          "owners": { "type": "array", "items": { "$ref": "#/components/schemas/OwnerRef" } }
+        }
+      },
+      "ProjectCatalog": {
+        "type": "object",
+        "properties": {
+          "generatedAt": { "type": "string", "format": "date-time", "nullable": true, "example": "2026-06-30T03:58:39.753Z" },
+          "source": { "type": "string", "example": "watchog" },
+          "stale": { "type": "boolean", "example": false },
+          "projects": { "type": "array", "items": { "$ref": "#/components/schemas/ProjectListItem" } }
+        }
+      },
+      "ProjectDetail": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "6912bbb19a6df5a9db9ff353" },
+          "name": { "type": "string", "example": "[Tech Academy] Learning Management System" },
+          "identifier": { "type": "string", "nullable": true, "example": "TECH" },
+          "description": { "type": "string", "example": "Project LMS for Tech Academy" },
+          "private": { "type": "boolean", "example": false },
+          "archived": { "type": "boolean", "example": false },
+          "memberCount": { "type": "integer", "example": 12 },
+          "owners": { "type": "array", "items": { "$ref": "#/components/schemas/PersonIdentity" } },
+          "members": { "type": "array", "items": { "$ref": "#/components/schemas/PersonIdentity" } },
+          "generatedAt": { "type": "string", "format": "date-time", "nullable": true, "example": "2026-06-30T03:58:39.753Z" },
+          "stale": { "type": "boolean", "example": false }
+        }
+      },
+      "ProjectTeam": {
+        "type": "object",
+        "properties": {
+          "projectId": { "type": "string", "example": "6912bbb19a6df5a9db9ff353" },
+          "name": { "type": "string", "example": "[Tech Academy] Learning Management System" },
+          "stale": { "type": "boolean", "example": false },
+          "generatedAt": { "type": "string", "format": "date-time", "nullable": true, "example": "2026-06-30T03:58:39.753Z" },
+          "members": { "type": "array", "items": { "$ref": "#/components/schemas/PersonIdentity" } }
+        }
+      },
+      "ProjectSummaryPerson": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "69968d22a4fa712519af41e3" },
+          "name": { "type": "string", "example": "Jane Doe" },
+          "open": { "type": "integer", "example": 296 },
+          "done": { "type": "integer", "example": 106 },
+          "total": { "type": "integer", "example": 402 }
+        }
+      },
+      "ProjectSummary": {
+        "type": "object",
+        "properties": {
+          "projectId": { "type": "string", "example": "69967ace2a6825a419f8fcd3" },
+          "name": { "type": "string", "example": "PPU Internships" },
+          "identifier": { "type": "string", "nullable": true, "example": "PPU" },
+          "stale": { "type": "boolean", "example": false },
+          "generatedAt": { "type": "string", "format": "date-time", "nullable": true, "example": "2026-06-30T03:58:39.753Z" },
+          "totals": { "$ref": "#/components/schemas/Totals" },
+          "people": { "type": "array", "items": { "$ref": "#/components/schemas/ProjectSummaryPerson" } }
+        }
+      }
+    }
+  }
+}

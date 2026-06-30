@@ -3,8 +3,13 @@
   "rewrites": [
     { "source": "/summary", "destination": "/api/summary" },
     { "source": "/summary/:id", "destination": "/api/summary" },
+    { "source": "/overview", "destination": "/api/summary" },
+    { "source": "/persons", "destination": "/api/persons" },
+    { "source": "/persons/:id", "destination": "/api/persons" },
+    { "source": "/persons/:id/summary", "destination": "/api/persons" },
     { "source": "/projects", "destination": "/api/projects" },
     { "source": "/projects/:id", "destination": "/api/projects" },
-    { "source": "/projects/:id/team", "destination": "/api/projects" }
+    { "source": "/projects/:id/team", "destination": "/api/projects" },
+    { "source": "/projects/:id/summary", "destination": "/api/projects" }
   ]
 }

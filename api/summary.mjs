@@ -6,20 +6,26 @@
 // Routes (GET only, bearer-authenticated):
 //   /summary        -> the full roster snapshot
 //   /summary/{id}   -> one person by Huly person id (404 if absent)
+//   /overview       -> overall totals only (lean), derived from the snapshot
 
 import { getSnapshot } from '../lib/store.mjs'
 import { authorize, json, isStale } from '../lib/apiauth.mjs'
+import { overview } from '../lib/views.mjs'
 
 export function handleSummary({ method = 'GET', path = '/', authHeader = '' }, { snapshot, token, now }) {
   if (!authorize(authHeader, token)) return json(401, { error: 'Unauthorized' })
   if (method !== 'GET') return json(405, { error: 'Method Not Allowed' })
 
+  // /overview is served by this handler too (same snapshot, totals only).
+  const isOverview = /\/overview\/?(?:\?|$)/.test(path)
   // Match /summary or /summary/{id}, tolerant of an /api prefix and querystring.
   const m = path.match(/\/summary(?:\/([^/?]+))?\/?(?:\?|$)/)
-  if (!m) return json(404, { error: 'Not Found' })
+  if (!isOverview && !m) return json(404, { error: 'Not Found' })
   if (!snapshot) return json(503, { error: 'No summary available yet' })
 
   const stale = isStale(snapshot.generatedAt, now)
+
+  if (isOverview) return json(200, { ...overview(snapshot), stale })
 
   if (m[1]) {
     const id = decodeURIComponent(m[1])
