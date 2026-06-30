@@ -113,6 +113,8 @@ e.g. the cron hasn't run). Each response carries `generatedAt` and a `stale` fla
       "id": "<huly person _id>",
       "name": "Jane Doe",
       "email": "jane@example.com",
+      "loginEmail": "jane@example.com",
+      "contactEmail": null,
       "open": 2, "done": 1, "total": 3,
       "projects": [
         { "id": "<space _id>", "name": "High-Code", "open": 1, "done": 1, "total": 2 }
@@ -126,9 +128,11 @@ e.g. the cron hasn't run). Each response carries `generatedAt` and a `stale` fla
 ```
 
 - `id` is the stable Huly person `_id` — map your dashboard's people against it.
-- `email` is `null` if Huly has no email channel for that person (it lives in a
-  Huly `Channel`, not on `Person`); `projects` is the per-project breakdown, empty
-  for cards with no project/space.
+- Email comes from two independent Huly sources, surfaced separately:
+  `loginEmail` (the account/login identity, `contact:class:SocialIdentity`) and
+  `contactEmail` (an added contact channel, `contact:class:Channel`). `email` is a
+  convenience field = `loginEmail ?? contactEmail`. Any may be `null`.
+- `projects` is the per-project breakdown, empty for cards with no project/space.
 - Unlike the Telegram message (which lists only people with open cards), the API
   returns **all** people; consumers filter.
 

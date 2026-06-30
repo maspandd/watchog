@@ -6,7 +6,17 @@ const snapshot = {
   generatedAt: '2026-06-30T01:00:00.000Z',
   source: 'watchog',
   people: [
-    { id: 'p1', name: 'Jane Doe', email: 'jane@example.com', open: 2, done: 1, total: 3, projects: [] },
+    {
+      id: 'p1',
+      name: 'Jane Doe',
+      email: 'jane.login@example.com',
+      loginEmail: 'jane.login@example.com',
+      contactEmail: null,
+      open: 2,
+      done: 1,
+      total: 3,
+      projects: [],
+    },
   ],
   totals: { people: 1, open: 2, done: 1, total: 3 },
   unassigned: 0,
@@ -24,11 +34,13 @@ test('GET /summary returns the full roster, not stale', () => {
   assert.equal(r.body.stale, false)
 })
 
-test('GET /summary/{id} returns one person with email', () => {
+test('GET /summary/{id} returns one person with both email sources', () => {
   const r = handleSummary({ method: 'GET', path: '/summary/p1', authHeader: auth }, { snapshot, token, now: fresh })
   assert.equal(r.status, 200)
   assert.equal(r.body.id, 'p1')
-  assert.equal(r.body.email, 'jane@example.com')
+  assert.equal(r.body.email, 'jane.login@example.com')
+  assert.equal(r.body.loginEmail, 'jane.login@example.com')
+  assert.equal(r.body.contactEmail, null)
 })
 
 test('GET /summary/{unknown} is 404', () => {

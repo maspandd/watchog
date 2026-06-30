@@ -16,7 +16,8 @@ const projectNameById = new Map([
   ['proj-a', 'High-Code'],
   ['proj-b', 'OutSystems'],
 ])
-const personEmailById = new Map([['p1', 'jane@example.com']])
+const loginEmailById = new Map([['p1', 'jane.login@example.com']])
+const contactEmailById = new Map([['p2', 'john.contact@example.com']])
 
 test('done cards count as done, open cards as open', () => {
   const issues = [
@@ -30,6 +31,8 @@ test('done cards count as done, open cards as open', () => {
     id: 'p1',
     name: 'Jane Doe',
     email: null,
+    loginEmail: null,
+    contactEmail: null,
     total: 3,
     done: 1,
     open: 2,
@@ -48,6 +51,8 @@ test('cancelled cards are excluded from both done and open', () => {
     id: 'p1',
     name: 'Jane Doe',
     email: null,
+    loginEmail: null,
+    contactEmail: null,
     total: 1,
     done: 1,
     open: 0,
@@ -99,16 +104,37 @@ test('empty input yields empty rows and zero totals', () => {
   assert.deepEqual(totals, { people: 0, total: 0, done: 0, open: 0 })
 })
 
-test('email is resolved per person, null when Huly has none', () => {
+test('email comes from login and contact sources separately, plus a merged field', () => {
   const issues = [
     { status: 's-todo', assignee: 'p1', space: 'proj-a' },
     { status: 's-todo', assignee: 'p2', space: 'proj-a' },
   ]
-  const { rows } = aggregate(issues, statusStateById, personNameById, projectNameById, personEmailById)
+  const { rows } = aggregate(issues, statusStateById, personNameById, projectNameById, loginEmailById, contactEmailById)
   const jane = rows.find((r) => r.id === 'p1')
   const john = rows.find((r) => r.id === 'p2')
-  assert.equal(jane.email, 'jane@example.com')
-  assert.equal(john.email, null) // p2 not in the email map
+  // Jane: login email only
+  assert.equal(jane.loginEmail, 'jane.login@example.com')
+  assert.equal(jane.contactEmail, null)
+  assert.equal(jane.email, 'jane.login@example.com')
+  // John: contact-channel email only
+  assert.equal(john.loginEmail, null)
+  assert.equal(john.contactEmail, 'john.contact@example.com')
+  assert.equal(john.email, 'john.contact@example.com')
+})
+
+test('merged `email` prefers the login source when both exist', () => {
+  const issues = [{ status: 's-todo', assignee: 'p1', space: 'proj-a' }]
+  const { rows } = aggregate(
+    issues,
+    statusStateById,
+    personNameById,
+    projectNameById,
+    new Map([['p1', 'login@example.com']]),
+    new Map([['p1', 'contact@example.com']]),
+  )
+  assert.equal(rows[0].loginEmail, 'login@example.com')
+  assert.equal(rows[0].contactEmail, 'contact@example.com')
+  assert.equal(rows[0].email, 'login@example.com')
 })
 
 test('per-project breakdown buckets a person’s cards by space, sorted by open desc', () => {
@@ -117,7 +143,7 @@ test('per-project breakdown buckets a person’s cards by space, sorted by open 
     { status: 's-progress', assignee: 'p1', space: 'proj-a' },
     { status: 's-todo', assignee: 'p1', space: 'proj-b' },
   ]
-  const { rows } = aggregate(issues, statusStateById, personNameById, projectNameById, personEmailById)
+  const { rows } = aggregate(issues, statusStateById, personNameById, projectNameById, loginEmailById, contactEmailById)
   assert.deepEqual(rows[0].projects, [
     { id: 'proj-a', name: 'High-Code', open: 1, done: 1, total: 2 },
     { id: 'proj-b', name: 'OutSystems', open: 1, done: 0, total: 1 },
@@ -129,7 +155,7 @@ test('per-project breakdown buckets a person’s cards by space, sorted by open 
 
 test('cards with no space still count for the person but add no project row', () => {
   const issues = [{ status: 's-todo', assignee: 'p1', space: null }]
-  const { rows } = aggregate(issues, statusStateById, personNameById, projectNameById, personEmailById)
+  const { rows } = aggregate(issues, statusStateById, personNameById, projectNameById, loginEmailById, contactEmailById)
   assert.equal(rows[0].total, 1)
   assert.deepEqual(rows[0].projects, [])
 })

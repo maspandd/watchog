@@ -7,7 +7,9 @@ const result = {
     {
       id: 'p1',
       name: 'Jane Doe',
-      email: 'jane@example.com',
+      email: 'jane.login@example.com',
+      loginEmail: 'jane.login@example.com',
+      contactEmail: null,
       open: 2,
       done: 1,
       total: 3,
@@ -19,13 +21,15 @@ const result = {
   cancelled: 1,
 }
 
-test('snapshot carries id, email, and per-person projects', () => {
+test('snapshot carries id, both email sources, and per-person projects', () => {
   const snap = buildSnapshot(result, { generatedAt: new Date('2026-06-30T01:00:00.000Z') })
   assert.equal(snap.source, 'watchog')
   assert.equal(snap.generatedAt, '2026-06-30T01:00:00.000Z')
   assert.equal(snap.people.length, 1)
   assert.equal(snap.people[0].id, 'p1')
-  assert.equal(snap.people[0].email, 'jane@example.com')
+  assert.equal(snap.people[0].email, 'jane.login@example.com')
+  assert.equal(snap.people[0].loginEmail, 'jane.login@example.com')
+  assert.equal(snap.people[0].contactEmail, null)
   assert.deepEqual(snap.people[0].projects, [
     { id: 'proj-a', name: 'High-Code', open: 2, done: 1, total: 3 },
   ])
@@ -33,7 +37,7 @@ test('snapshot carries id, email, and per-person projects', () => {
   assert.equal(snap.cancelled, 1)
 })
 
-test('missing email and projects degrade to null/empty, not crash', () => {
+test('missing emails and projects degrade to null/empty, not crash', () => {
   const snap = buildSnapshot({
     rows: [{ id: 'p2', name: 'John Smith', open: 1, done: 0, total: 1 }],
     totals: { people: 1, open: 1, done: 0, total: 1 },
@@ -41,6 +45,8 @@ test('missing email and projects degrade to null/empty, not crash', () => {
     cancelled: 0,
   })
   assert.equal(snap.people[0].email, null)
+  assert.equal(snap.people[0].loginEmail, null)
+  assert.equal(snap.people[0].contactEmail, null)
   assert.deepEqual(snap.people[0].projects, [])
   assert.equal(snap.generatedAt, null) // no generatedAt -> null, not a throw
 })

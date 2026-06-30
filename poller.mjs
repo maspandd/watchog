@@ -48,7 +48,8 @@ async function main() {
       data.statusStateById,
       data.personNameById,
       data.projectNameById,
-      data.personEmailById,
+      data.loginEmailById,
+      data.contactEmailById,
     )
 
     console.log(
